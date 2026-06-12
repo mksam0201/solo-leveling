@@ -142,6 +142,8 @@ function saveAll() {
   store.save("boss", bossRec); store.save("logs", logs); store.save("weights", weights);
   store.save("dungeon", dungeon);
   store.save("cards", cards);
+  store.save("savedAt", new Date().toISOString());
+  scheduleAutoUpload();
 }
 
 /* ───── 日期工具 ───── */
@@ -778,6 +780,153 @@ renderLibrary();
 renderDungeon();
 renderHeaderTitle();
 renderCollection();
+
+/* ───── 跨裝置同步（GitHub 私人 Gist） ───── */
+const SAVE_FILE = "solo-leveling-save.json";
+
+function buildSave() {
+  return {
+    version: 1,
+    savedAt: store.load("savedAt", null) || new Date().toISOString(),
+    data: { player, daily, streak, boss: bossRec, logs, weights, dungeon, cards },
+  };
+}
+
+function applySave(s) {
+  if (!s || !s.data || !s.data.player) throw new Error("存檔格式錯誤");
+  const d = s.data;
+  store.save("player", d.player); store.save("daily", d.daily); store.save("streak", d.streak);
+  store.save("boss", d.boss || []); store.save("logs", d.logs || []); store.save("weights", d.weights || []);
+  store.save("dungeon", d.dungeon || null); store.save("cards", d.cards || []);
+  store.save("savedAt", s.savedAt);
+  localStorage.setItem("sl_welcomed", "1");
+  location.reload();
+}
+
+function syncToken() { return localStorage.getItem("sl_sync_token") || ""; }
+function setSyncStatus(msg, isError) {
+  const el = document.getElementById("sync-status");
+  el.textContent = msg;
+  el.style.color = isError ? "var(--danger)" : "var(--glow)";
+}
+
+async function gistApi(method, path, body) {
+  const res = await fetch("https://api.github.com" + path, {
+    method,
+    headers: { "Authorization": "token " + syncToken(), "Accept": "application/vnd.github+json" },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) throw new Error("GitHub API " + res.status);
+  return res.json();
+}
+
+async function findOrCreateGist() {
+  let id = localStorage.getItem("sl_sync_gist");
+  if (id) return id;
+  const list = await gistApi("GET", "/gists?per_page=100");
+  const hit = list.find(g => g.files && g.files[SAVE_FILE]);
+  if (hit) { localStorage.setItem("sl_sync_gist", hit.id); return hit.id; }
+  const created = await gistApi("POST", "/gists", {
+    description: "獨自升級系統存檔（自動同步）", public: false,
+    files: { [SAVE_FILE]: { content: JSON.stringify(buildSave()) } },
+  });
+  localStorage.setItem("sl_sync_gist", created.id);
+  return created.id;
+}
+
+async function uploadSave() {
+  const id = await findOrCreateGist();
+  await gistApi("PATCH", "/gists/" + id, { files: { [SAVE_FILE]: { content: JSON.stringify(buildSave()) } } });
+}
+
+async function downloadSave() {
+  const id = await findOrCreateGist();
+  const g = await gistApi("GET", "/gists/" + id);
+  return JSON.parse(g.files[SAVE_FILE].content);
+}
+
+let autoUpTimer = null;
+function scheduleAutoUpload() {
+  if (!syncToken()) return;
+  clearTimeout(autoUpTimer);
+  autoUpTimer = setTimeout(async () => {
+    try {
+      await uploadSave();
+      setSyncStatus("✓ 已自動上傳　" + new Date().toLocaleTimeString());
+    } catch (e) { setSyncStatus("自動上傳失敗：" + e.message, true); }
+  }, 4000);
+}
+
+async function startupSync() {
+  if (!syncToken()) return;
+  try {
+    setSyncStatus("檢查雲端存檔中…");
+    const cloud = await downloadSave();
+    const localAt = store.load("savedAt", null);
+    if (cloud && cloud.savedAt && (!localAt || cloud.savedAt > localAt)) {
+      notify("【系統】偵測到雲端存檔較新，同步中…");
+      setTimeout(() => applySave(cloud), 1000);
+    } else {
+      setSyncStatus("✓ 已是最新存檔（雲端同步已啟用）");
+    }
+  } catch (e) { setSyncStatus("雲端連線失敗：" + e.message, true); }
+}
+
+/* 同步 UI 事件 */
+document.getElementById("sync-enable-btn").addEventListener("click", async () => {
+  const t = document.getElementById("sync-token-input").value.trim();
+  if (!t) { setSyncStatus("請先貼上 Token", true); return; }
+  localStorage.setItem("sl_sync_token", t);
+  localStorage.removeItem("sl_sync_gist");
+  document.getElementById("sync-token-input").value = "";
+  try {
+    setSyncStatus("驗證並連線中…");
+    const cloud = await downloadSave();
+    const localAt = store.load("savedAt", null);
+    if (cloud && cloud.savedAt && (!localAt || cloud.savedAt > localAt)) {
+      if (window.confirm("雲端已有較新的存檔，要載入並覆蓋本機進度嗎？\n（取消＝保留本機進度，稍後可手動上傳覆蓋雲端）")) {
+        applySave(cloud); return;
+      }
+    }
+    await uploadSave();
+    setSyncStatus("✓ 同步已啟用，本機存檔已上傳");
+    notify("【系統】跨裝置同步已啟用");
+  } catch (e) {
+    setSyncStatus("啟用失敗：" + e.message + "（請確認 Token 有 gist 權限）", true);
+    localStorage.removeItem("sl_sync_token");
+  }
+});
+
+document.getElementById("sync-up-btn").addEventListener("click", async () => {
+  if (!syncToken()) { setSyncStatus("尚未啟用同步：請先貼上 Token", true); return; }
+  try { setSyncStatus("上傳中…"); await uploadSave(); setSyncStatus("✓ 上傳完成　" + new Date().toLocaleTimeString()); }
+  catch (e) { setSyncStatus("上傳失敗：" + e.message, true); }
+});
+
+document.getElementById("sync-down-btn").addEventListener("click", async () => {
+  if (!syncToken()) { setSyncStatus("尚未啟用同步：請先貼上 Token", true); return; }
+  if (!window.confirm("將以雲端存檔覆蓋本機進度，確定？")) return;
+  try { setSyncStatus("下載中…"); applySave(await downloadSave()); }
+  catch (e) { setSyncStatus("下載失敗：" + e.message, true); }
+});
+
+document.getElementById("export-btn").addEventListener("click", () => {
+  const code = btoa(unescape(encodeURIComponent(JSON.stringify(buildSave()))));
+  const box = document.getElementById("backup-box");
+  box.value = code;
+  box.select();
+  try { document.execCommand("copy"); notify("匯出代碼已產生並複製到剪貼簿"); } catch { notify("匯出代碼已產生，請手動全選複製"); }
+});
+
+document.getElementById("import-btn").addEventListener("click", () => {
+  const code = document.getElementById("backup-box").value.trim();
+  if (!code) { notify("請先把匯出代碼貼到下方欄位", { warn: true }); return; }
+  if (!window.confirm("將以這份備份覆蓋本機進度，確定？")) return;
+  try { applySave(JSON.parse(decodeURIComponent(escape(atob(code))))); }
+  catch { notify("代碼無效：請確認完整貼上", { warn: true }); }
+});
+
+startupSync();
 
 // PWA：離線快取（http/https 環境才註冊）
 if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {

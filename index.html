@@ -152,6 +152,32 @@
     <div class="sys-window-title">【系統】每週訓練量（獲得 EXP）</div>
     <div id="volume-chart" class="chart-box"></div>
   </div>
+
+  <!-- 跨裝置同步 -->
+  <div class="sys-window">
+    <div class="sys-window-title">【系統】跨裝置同步</div>
+    <div class="sync-desc">
+      存檔保存在你自己的 GitHub 私人 Gist（僅你本人可見）。手機與桌機填入同一組 Token 即自動同步：
+      變更後自動上傳，開啟 App 時若雲端較新會自動載入。<br>
+      <a class="demo-btn" href="https://github.com/settings/tokens/new?scopes=gist&description=solo-leveling-sync" target="_blank" rel="noopener">⚷ 一鍵建立 Token（勾選 gist 權限即可）</a>
+    </div>
+    <div class="inline-form">
+      <input type="password" id="sync-token-input" placeholder="貼上 GitHub Token（ghp_ 開頭）">
+      <button type="button" class="sys-btn" id="sync-enable-btn">啟用</button>
+    </div>
+    <div class="sync-btn-row">
+      <button type="button" class="sys-btn" id="sync-up-btn">⬆ 立即上傳</button>
+      <button type="button" class="sys-btn" id="sync-down-btn">⬇ 載入雲端存檔</button>
+    </div>
+    <div id="sync-status" class="sync-status"></div>
+
+    <div class="sys-window-title sub-title">手動備份（離線可用）</div>
+    <div class="sync-btn-row">
+      <button type="button" class="sys-btn" id="export-btn">產生匯出代碼</button>
+      <button type="button" class="sys-btn" id="import-btn">匯入代碼</button>
+    </div>
+    <textarea id="backup-box" rows="4" placeholder="匯出代碼會出現在這裡；匯入時把另一台裝置的代碼貼進來再按「匯入代碼」"></textarea>
+  </div>
 </section>
 
 <!-- ════ 收藏 ════ -->

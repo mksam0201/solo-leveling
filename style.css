@@ -302,6 +302,18 @@ body {
   border-bottom-color: rgba(155, 92, 255, 0.35);
 }
 
+/* ═══ 同步 ═══ */
+.sync-desc { font-size: 12.5px; color: var(--text-dim); line-height: 1.8; margin-bottom: 14px; }
+.sync-btn-row { display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+.sync-btn-row .sys-btn { flex: 1; min-width: 130px; }
+.sync-status { font-size: 12.5px; color: var(--glow); min-height: 18px; margin-bottom: 4px; }
+#backup-box {
+  width: 100%; background: #0a1828; border: 1px solid var(--glow-dim);
+  color: var(--text); padding: 10px; font-size: 12px; font-family: Consolas, monospace;
+  resize: vertical;
+}
+#backup-box:focus { outline: none; border-color: var(--glow); }
+
 /* ═══ 收藏頁 ═══ */
 .gold-display {
   font-size: 18px; color: var(--gold);

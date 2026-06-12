@@ -1,5 +1,5 @@
 /* 獨自升級系統 — Service Worker（離線快取） */
-const CACHE = "solo-leveling-v1";
+const CACHE = "solo-leveling-v2";
 const ASSETS = [
   "./", "./index.html", "./style.css", "./app.js",
   "./manifest.webmanifest", "./icon-192.png", "./icon-512.png",
